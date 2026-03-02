@@ -1,4 +1,6 @@
-gradio
-nltk
-PyPDF2
-scikit-learn
+import nltk
+import streamlit as st
+def download_nltk()
+nltk.download('punkt', quiet=True)
+nltk.download('punkt_tab', quiet=True)
+download_nltk()
