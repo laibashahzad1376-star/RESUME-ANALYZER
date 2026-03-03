@@ -1,14 +1,10 @@
-import re
-import nltk
+import streamlit as st
 import PyPDF2
-from sklearn.feature_extraction.text import TfidfVectorizer
-from nltk.tokenize import sent_tokenize
+import re
 
-nltk.download('punkt')
-
-# ---------------------------------------
-# Predefined Important Skills
-# ---------------------------------------
+# -----------------------------
+# Important Skills List
+# -----------------------------
 IMPORTANT_SKILLS = [
     "python", "machine learning", "data analysis",
     "sql", "excel", "communication",
@@ -16,81 +12,57 @@ IMPORTANT_SKILLS = [
     "leadership", "project management"
 ]
 
-# ---------------------------------------
+# -----------------------------
 # Extract Text from PDF
-# ---------------------------------------
+# -----------------------------
 def extract_text_from_pdf(file):
     text = ""
     pdf_reader = PyPDF2.PdfReader(file)
     for page in pdf_reader.pages:
-        extracted = page.extract_text()
-        if extracted:
-            text += extracted + " "
+        page_text = page.extract_text()
+        if page_text:
+            text += page_text + " "
     return text
 
-# ---------------------------------------
+# -----------------------------
 # Extract Text from TXT
-# ---------------------------------------
+# -----------------------------
 def extract_text_from_txt(file):
     return file.read().decode("utf-8")
 
-
-# ---------------------------------------
+# -----------------------------
 # Clean Text
-# ---------------------------------------
+# -----------------------------
 def clean_text(text):
     text = re.sub(r'[^a-zA-Z\s]', '', text)
-    text = text.lower()
-    return text
+    return text.lower()
 
+# -----------------------------
+# Analyze Resume
+# -----------------------------
+def analyze_resume(file):
 
-# ---------------------------------------
-# Skill Detection
-# ---------------------------------------
-def detect_skills(text):
+    if file.name.endswith(".pdf"):
+        raw_text = extract_text_from_pdf(file)
+    elif file.name.endswith(".txt"):
+        raw_text = extract_text_from_txt(file)
+    else:
+        return None
+
+    cleaned_text = clean_text(raw_text)
+
     detected = []
     missing = []
 
     for skill in IMPORTANT_SKILLS:
-        if skill in text:
+        if skill in cleaned_text:
             detected.append(skill)
         else:
             missing.append(skill)
 
-    return detected, missing
-
-
-# ---------------------------------------
-# Grammar Feedback (Basic NLP Logic)
-# ---------------------------------------
-def grammar_analysis(text):
-    sentences = sent_tokenize(text)
-
-    short_sentences = [s for s in sentences if len(s.split()) < 4]
-    long_sentences = [s for s in sentences if len(s.split()) > 30]
-
-    feedback = []
-
-    if len(short_sentences) > 3:
-        feedback.append("Too many very short sentences detected.")
-
-    if len(long_sentences) > 2:
-        feedback.append("Some sentences are too long. Improve readability.")
-
-    if not feedback:
-        feedback.append("Sentence structure looks balanced.")
-
-    return " ".join(feedback)
-
-
-# ---------------------------------------
-# Resume Strength Score
-# ---------------------------------------
-def calculate_score(detected_skills, text):
-    skill_score = (len(detected_skills) / len(IMPORTANT_SKILLS)) * 70
-
-    word_count = len(text.split())
-    length_score = 0
+    # Score Calculation
+    skill_score = (len(detected) / len(IMPORTANT_SKILLS)) * 70
+    word_count = len(cleaned_text.split())
 
     if 300 <= word_count <= 800:
         length_score = 30
@@ -99,45 +71,36 @@ def calculate_score(detected_skills, text):
     else:
         length_score = 20
 
-    final_score = round(skill_score + length_score, 2)
-    return min(final_score, 100)
+    final_score = round(min(skill_score + length_score, 100), 2)
+
+    return final_score, detected, missing
 
 
-# ---------------------------------------
-# Main Analyzer Function
-# ---------------------------------------
-def analyze_resume(file):
+# -----------------------------
+# Streamlit UI
+# -----------------------------
+st.title("Professional AI Resume Analyzer")
+st.write("Upload your Resume (PDF or TXT) to analyze skills and get a strength score.")
 
-    if file is None:
-        return "Please upload a resume file."
+uploaded_file = st.file_uploader("Upload Resume", type=["pdf", "txt"])
 
-    # Detect file type
-    if file.name.endswith(".pdf"):
-        raw_text = extract_text_from_pdf(file)
-    elif file.name.endswith(".txt"):
-        raw_text = extract_text_from_txt(file)
+if uploaded_file is not None:
+
+    result = analyze_resume(uploaded_file)
+
+    if result is None:
+        st.error("Unsupported file format.")
     else:
-        return "Unsupported file format. Upload PDF or TXT."
+        score, detected_skills, missing_skills = result
 
-    cleaned = clean_text(raw_text)
+        st.subheader("Resume Strength Score")
+        st.success(f"{score}/100")
 
-    detected, missing = detect_skills(cleaned)
+        st.subheader("Detected Skills")
+        if detected_skills:
+            st.write(", ".join(detected_skills))
+        else:
+            st.write("No important skills detected.")
 
-    grammar_feedback = grammar_analysis(raw_text)
-
-    score = calculate_score(detected, cleaned)
-
-    result = f"""
-Resume Strength Score: {score}/100
-
-Detected Skills:
-{', '.join(detected) if detected else 'No important skills detected'}
-
-Missing Important Skills:
-{', '.join(missing)}
-
-Grammar Feedback:
-{grammar_feedback}
-"""
-
-    return result
+        st.subheader("Missing Important Skills")
+        st.write(", ".join(missing_skills))
